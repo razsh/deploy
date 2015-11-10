@@ -1,0 +1,103 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use FindBin qw($Bin);
+use lib "$Bin/../lib";	
+
+use Error qw(:try);
+use Data::Dumper;
+
+use deploy::Config;
+use deploy::Git;
+use Jira::REST;
+
+use constant NOT_MERGED  => 'Not merged';
+use constant MERGED      => 'Merged';
+use constant NO_CONFLICT => 'OK';
+use constant CONFLICT    => 'Conflicts';
+
+my $release_number = $ARGV[0];
+unless ($release_number =~ /^\d\.\d\d\d?/ ) {
+	die "Usage; $0 <X.XX[X]>\n"
+}
+my $release = 'release' . $release_number;
+
+my $git  = new deploy::Git;
+my $jira = new Jira::REST;
+
+my $r = $jira->get_version_issues($release_number);
+
+try {
+	$git->fetch();
+	$git->checkout($release);
+	$git->pull($release);
+} catch Error with {
+	my ($e) = @_;
+	die $e->text();
+};
+
+foreach my $issue (@{ $r->{issues} }) {
+	my $top_rc_branch = '';
+
+	try {
+		$top_rc_branch = $git->get_latest_rc_branch($issue->{key});
+	} catch Error with {
+		my ($e) = @_;
+		warn $e->text();
+	};
+
+	my $is_merged   = NOT_MERGED;
+	my $is_conflict = NO_CONFLICT;
+
+	if ($top_rc_branch) {
+		try {
+			if ($git->was_merged($release, $top_rc_branch)) {
+				$is_merged = MERGED;
+			}
+		} catch Error with {
+				my ($e) = @_;
+				warn $e->text();
+		};
+	} else {
+		$is_conflict = '';
+	}
+
+	if ( $top_rc_branch && $is_merged eq NOT_MERGED) {
+		my $patch = '';
+		try {
+			$git->checkout($top_rc_branch);
+			$git->pull($top_rc_branch);
+			$patch = $git->format_patch($release);
+			$git->checkout($release);
+		} catch Error with {
+			my ($e) = @_;
+			warn $e->text();
+		};
+
+		if ($patch) {
+			my $patch_file = "/tmp/$top_rc_branch.patch";
+			if (open(PATCH, ">$patch_file")) {
+				print PATCH $patch;
+				close(PATCH);
+				try {
+					$git->check_apply_patch($patch_file);
+				} catch Error with {
+					$is_conflict = CONFLICT;
+				};
+				unlink $patch_file;
+			} else {
+				warn "Can't open file $patch_file: $!\n";
+			}
+		}
+	}
+
+	print $issue->{key}, ' ',
+	sprintf("%-21s", $issue->{fields}->{status}->{name}),
+	sprintf("%-13s", $is_merged),
+	sprintf("%-21s", $issue->{fields}->{assignee}->{displayName}),
+	sprintf("%-81s", $top_rc_branch),
+	sprintf("%-10s", $is_conflict),
+	"\n";
+}

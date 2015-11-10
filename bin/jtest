@@ -1,0 +1,23 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use FindBin qw($Bin);
+use lib "$Bin/../lib";	
+
+use Error qw(:try);
+use Data::Dumper;
+
+use deploy::Config;
+use deploy::Git;
+use Jira::REST;
+
+my $issue = 'BF-24226';
+
+my $jira = new Jira::REST;
+
+
+#my $project = $jira->get_project(deploy::Config->jira_project_id);
+my $r = $jira->update_issue_status($issue, 'Merged');
+print Dumper $r;

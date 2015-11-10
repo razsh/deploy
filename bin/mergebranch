@@ -1,0 +1,54 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use FindBin qw($Bin);
+use lib "$Bin/../lib";	
+
+use Error qw(:try);
+use Data::Dumper;
+
+use deploy::Config;
+use deploy::Git;
+use Jira::REST;
+
+my $release_number = '9.25';
+my $release        = 'release' . $release_number;
+
+my $branch = $ARGV[0];
+
+die "Usage: $0 <branch>" unless $branch;
+
+my $git  = new deploy::Git;
+my $jira = new Jira::REST;
+my @merged_branches = ();
+
+try {
+	$git->checkout_track($branch);
+	$git->rebase($release);
+
+	$git->checkout($release);
+	$git->merge_no_ff($branch);
+	@merged_branches = $git->get_merged_branches($release);
+} catch Error with {
+	my ($e) = @_;
+	die $e->text();
+};
+
+if (grep($branch eq $_, @merged_branches)) {
+	print "Successfully merged!\n";
+	try {
+		$git->push($release);
+	} catch Error with {
+		my ($e) = @_;
+		die $e->text();
+	};
+} else {
+	print "Something went wrong!\n";
+}
+
+$branch =~ /^(.+\-\d+)/;
+my $issue = $1;
+
+$jira->update_issue_status($issue);

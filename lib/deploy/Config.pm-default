@@ -1,0 +1,12 @@
+package deploy::Config;
+
+use strict;
+use warnings;
+
+use constant jira_project_id    => XXXXX;
+use constant jira_domain        => 'xxxxxxxx.atlassian.net';
+use constant jira_url           => 'https://' . jira_domain . '/rest/api/2';
+use constant jira_url_v1        => 'https://' . jira_domain . '/rest/api';
+use constant git_dir            => '/opt/mygitdir';
+ 
+1;

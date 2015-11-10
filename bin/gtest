@@ -1,0 +1,37 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use FindBin qw($Bin);
+use lib "$Bin/../lib";	
+
+use deploy::Config;
+use deploy::Git;
+use Data::Dumper;
+
+my $issue = 'BF-24092';
+my $release = 'release9.23';
+
+my $git = new deploy::Git;
+
+print $git->fetch(), "\n";
+
+my $top_rc_branch = $git->get_latest_rc_branch($issue);
+print "$top_rc_branch\n";
+
+print $git->checkout($release), "\n";
+print $git->pull($release), "\n";
+my @merged_branches = $git->get_merged_branches($release);
+
+if (grep($top_rc_branch eq $_, @merged_branches)) {
+	print "$issue was merged into $release\n";
+} else {
+	print "$issue was not merged into $release\n";
+}
+#print join("\n", @merged_branches), "\n";
+
+__END__;
+
+
+
