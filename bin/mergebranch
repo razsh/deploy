@@ -13,12 +13,10 @@ use deploy::Config;
 use deploy::Git;
 use Jira::REST;
 
-my $release_number = '9.25';
-my $release        = 'release' . $release_number;
+my $release = $ARGV[0];
+my $branch  = $ARGV[1];
 
-my $branch = $ARGV[0];
-
-die "Usage: $0 <branch>" unless $branch;
+die "Usage: $0 <release> <branch>" unless $branch && $release;
 
 my $git  = new deploy::Git;
 my $jira = new Jira::REST;
