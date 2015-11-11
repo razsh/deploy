@@ -30,7 +30,7 @@ my $jira = new Jira::REST;
 my $r = $jira->get_version_issues($release_number);
 
 try {
-	$git->fetch();
+#	$git->fetch();
 	$git->checkout($release);
 	$git->pull($release);
 } catch Error with {
