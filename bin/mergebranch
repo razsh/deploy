@@ -22,7 +22,7 @@ die "Usage: $0 <branch>" unless $branch;
 
 my $git  = new deploy::Git;
 my $jira = new Jira::REST;
-my @merged_branches = ();
+my $was_merged = 0;
 
 try {
 	$git->checkout_track($branch);
@@ -30,13 +30,13 @@ try {
 
 	$git->checkout($release);
 	$git->merge_no_ff($branch);
-	@merged_branches = $git->get_merged_branches($release);
+	$was_merged = $git->was_merged($release, $branch);
 } catch Error with {
 	my ($e) = @_;
 	die $e->text();
 };
 
-if (grep($branch eq $_, @merged_branches)) {
+if ($was_merged) {
 	print "Successfully merged!\n";
 	try {
 		$git->push($release);
