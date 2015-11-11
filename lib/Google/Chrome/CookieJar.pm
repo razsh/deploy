@@ -7,32 +7,50 @@ use Crypt::Mode::CBC;
 use Crypt::PBKDF2;
 use DBI;
 
-use constant jar_file => "$ENV{HOME}/.config/google-chrome/Default/Cookies";
-use constant crypto   => {
-	pass       => 'peanuts',
+sub _get_osx_chrome_pass {
+	my $p = `/usr/bin/security find-generic-password  -a 'Chrome' -s 'Chrome Safe Storage' -g 2>&1`;
+	if($p =~ /^\s*password:\s*"([^"]+)"/m) {
+		return $1;
+	}
+	return '';
+}
+
+our $jar_file;
+our $crypto   = {
 	salt       => 'saltysalt',
-	iterations => 1,
 	iv         => ' ' x 16,
 	output_len => 16
 };
 
+if ($^O eq 'linux') {
+	$jar_file             = "$ENV{HOME}/.config/google-chrome/Default/Cookies";
+	$crypto->{pass}       = 'peanuts';
+	$crypto->{iterations} = 1;
+} elsif ($^O eq 'darwin') {
+	$jar_file             = "$ENV{HOME}/Library/Application Support/Google/Chrome/Default/Cookies";
+	$crypto->{pass}       = _get_osx_chrome_pass();
+	$crypto->{iterations} = 1003;
+} else {
+	die "Your OS is not supported\n";
+}
+
+our $pbkdf2 = Crypt::PBKDF2->new(
+	hash_class => 'HMACSHA1',
+	iterations => $crypto->{iterations},
+	output_len => $crypto->{output_len},
+	salt_len   => length($crypto->{salt})
+);
+
+our $hash = $pbkdf2->PBKDF2(
+	$crypto->{salt},
+	$crypto->{pass},
+	$crypto->{iterations},
+	undef,
+	$crypto->{output_len}
+);
+
 sub new {
 	my ($class) = @_;
-
-	my $pbkdf2 = Crypt::PBKDF2->new(
-		hash_class => 'HMACSHA1',
-		iterations => crypto->{iterations},
-		output_len => crypto->{output_len},
-		salt_len   => length(crypto->{salt})
-	);
-
-	my $hash = $pbkdf2->PBKDF2(
-		crypto->{salt},
-		crypto->{pass},
-		crypto->{iterations},
-		undef,
-		crypto->{output_len}
-	);
 
 	my $self = {
 		loaded => 0,
@@ -48,7 +66,7 @@ sub load {
 
 	return if $self->{loaded};
 
-	my $dbh = DBI->connect( 'dbi:SQLite:dbname=' . jar_file, '', '',
+	my $dbh = DBI->connect( "dbi:SQLite:dbname=$jar_file", '', '',
 		{ sqlite_see_if_its_a_number => 1 }
 	);
 
@@ -91,7 +109,7 @@ sub _decrypt_data {
 	$encrypted_value =~ s/^v10//;
 
 	my $m = Crypt::Mode::CBC->new('AES');
-	my $plaintext = $m->decrypt($encrypted_value, $self->{hash}, crypto->{iv});
+	my $plaintext = $m->decrypt($encrypted_value, $self->{hash}, $crypto->{iv});
 
 	return $plaintext;
 }
